@@ -622,6 +622,18 @@ body.bank .topbar { border-bottom-color: var(--gold); }
 }
 .menu-code { font-size: 32px; font-weight: 800; letter-spacing: 6px; }
 
+.menu-pin {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    background: var(--card2);
+    border-radius: 14px;
+    padding: 10px 14px;
+}
+.pin-code { font-size: 26px; font-weight: 800; letter-spacing: 5px; }
+.pin-hint { flex: 1; min-width: 0; line-height: 1.35; }
+
 .menu-item {
     width: 100%;
     height: 50px;

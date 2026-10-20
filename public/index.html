@@ -15,7 +15,7 @@
     <link rel="apple-touch-icon" href="app-icon.jpg">
     <link rel="icon" href="icon.svg" type="image/svg+xml">
 
-    <link rel="stylesheet" href="style.css?v=3">
+    <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
 
@@ -56,6 +56,7 @@
                     <input id="join-code" class="input code" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="Код (4 цифры)">
                     <button id="btn-join" class="btn big">Войти</button>
                 </div>
+                <input id="join-pin" class="input code hidden" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="PIN игрока">
             </div>
 
             <div id="join-error" class="error"></div>
@@ -205,6 +206,14 @@
                 <button id="btn-share" class="btn">Поделиться</button>
             </div>
 
+            <div class="menu-pin">
+                <div>
+                    <div class="muted small">Ваш PIN</div>
+                    <div id="menu-pin" class="pin-code">----</div>
+                </div>
+                <div class="muted small pin-hint">Нужен, чтобы вернуться в игру на другом телефоне или после очистки браузера. Никому не показывайте.</div>
+            </div>
+
             <button id="btn-sound" class="menu-item">🔊 Звук: вкл</button>
 
             <div id="bank-tools" class="hidden">
@@ -231,7 +240,16 @@
         </div>
     </div>
 
+    <!-- ===== Комната пропала с сервера (ждём банкира) ===== -->
+    <div id="waiting" class="sheet center-sheet hidden">
+        <div class="sheet-card center">
+            <h2 id="waiting-title"></h2>
+            <p id="waiting-text"></p>
+            <button id="waiting-exit" class="btn big">Выйти</button>
+        </div>
+    </div>
+
     <script src="/socket.io/socket.io.js"></script>
-    <script src="app.js?v=4"></script>
+    <script src="app.js?v=5"></script>
 </body>
 </html>

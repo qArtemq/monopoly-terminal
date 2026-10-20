@@ -62,7 +62,7 @@ function toast(msg, kind) {
 
 /* ====================== Состояние ====================== */
 
-let session = store.get('mono_session', null); // { code, playerId, name }
+let session = store.get('mono_session', null); // { code, playerId, token, pin, name, host }
 let state = null; // последнее состояние комнаты с сервера
 let mode = store.get('mono_mode', 'player') === 'bank' ? 'bank' : 'player';
 let target = null; // выбранный получатель в терминале
@@ -72,6 +72,8 @@ let soundOn = store.get('mono_sound', true) !== false;
 let busy = false;
 let targetsSig = '';
 let quickSig = '';
+let waitTimer = null; // повторные попытки входа, пока комнаты нет на сервере
+let autoBusy = false;
 
 function getMe() {
     if (!state || !session) return null;
@@ -168,6 +170,7 @@ function showApp() {
 }
 
 function clearSession() {
+    stopWaiting();
     session = null;
     state = null;
     lastLogSeen = null;
@@ -176,6 +179,7 @@ function clearSession() {
     targetsSig = '';
     quickSig = '';
     store.del('mono_session');
+    store.del('mono_backup');
 }
 
 let currentTab = 'dice';
@@ -202,34 +206,100 @@ function setJoinBusy(b) {
 }
 
 function onJoined(res) {
-    session = { code: res.code, playerId: res.playerId, name: res.name, host: !!res.host };
+    stopWaiting();
+    session = {
+        code: res.code,
+        playerId: res.playerId,
+        token: res.token,
+        pin: res.pin,
+        name: res.name,
+        host: !!res.host
+    };
     store.set('mono_session', session);
     store.set('mono_name', res.name);
+    // Копия комнаты нужна только банкиру: с ней он поднимет комнату после перезапуска сервера
+    if (res.host && typeof res.backup === 'string') store.set('mono_backup', { code: res.code, blob: res.backup });
+    else if (!res.host) store.del('mono_backup');
     setJoinBusy(false);
     showApp();
 }
 
-function joinRoom(code, name, playerId, auto) {
-    socket.emit('join_room', { code, name, playerId }, (res) => {
-        if (!res || !res.ok) {
-            let msg = res && res.error ? res.error : 'Не удалось войти';
-            if (auto && msg === 'Комната не найдена') msg = 'Комната закрыта или удалена';
-            if (auto) {
-                clearSession();
-                showJoin(msg);
-            } else {
-                showJoinError(msg);
-            }
-            setJoinBusy(false);
-            return;
+// Первый вход по коду и имени (с PIN, если имя уже занято)
+function joinRoom(code, name, pin) {
+    socket.emit('join_room', { code, name, pin }, (res) => {
+        setJoinBusy(false);
+        if (res && res.ok) return onJoined(res);
+        if (res && res.reason === 'need_pin') {
+            $('join-pin').classList.remove('hidden');
+            $('join-pin').focus();
         }
-        onJoined(res);
+        showJoinError(res && res.error ? res.error : 'Не удалось войти');
     });
 }
 
+/* ----- Автоматический вход по сохранённой сессии и ожидание банкира ----- */
+
+function getBackup() {
+    const b = store.get('mono_backup', null);
+    return b && session && b.code === session.code && typeof b.blob === 'string' ? b.blob : null;
+}
+
+function stopWaiting() {
+    if (waitTimer) clearInterval(waitTimer);
+    waitTimer = null;
+    $('waiting').classList.add('hidden');
+}
+
+function showWaiting() {
+    const host = !!(session && session.host);
+    const hasCopy = !!getBackup();
+    $('waiting-title').textContent = 'Комната не найдена';
+    if (host) {
+        $('waiting-text').textContent = hasCopy
+            ? 'Сервер перезапускался. Восстанавливаем комнату из копии на этом телефоне…'
+            : 'Сервер перезапускался, а копии комнаты на этом телефоне нет. Восстановить её не получится.';
+    } else {
+        $('waiting-text').textContent = 'Похоже, сервер перезапускался. Ждём, пока банкир откроет игру и восстановит комнату…';
+    }
+    $('waiting').classList.remove('hidden');
+    // У банкира без копии повторять нечего
+    if (!waitTimer && (!host || hasCopy)) waitTimer = setInterval(autoJoin, 4000);
+}
+
+function autoJoin() {
+    if (!session || autoBusy || !socket.connected) return;
+    autoBusy = true;
+    const payload = {
+        code: session.code,
+        name: session.name,
+        playerId: session.playerId,
+        token: session.token,
+        strict: true // только по ключу: не искать по имени и не создавать нового игрока
+    };
+    if (session.host) {
+        const backup = getBackup();
+        if (backup) payload.backup = backup;
+    }
+    socket.timeout(8000).emit('join_room', payload, (err, res) => {
+        autoBusy = false;
+        if (err) return; // нет ответа: попробуем при следующем подключении
+        if (res && res.ok) return onJoined(res);
+        if (res && res.reason === 'no_room') return showWaiting();
+        const msg = res && res.error ? res.error : 'Не удалось войти';
+        clearSession();
+        showJoin(msg);
+    });
+}
+
+$('waiting-exit').addEventListener('click', () => {
+    socket.emit('leave', {});
+    clearSession();
+    showJoin('');
+});
+
 socket.on('connect', () => {
     setConn(true);
-    if (session) joinRoom(session.code, session.name, session.playerId, true);
+    if (session) autoJoin();
 });
 socket.on('disconnect', () => setConn(false));
 socket.on('connect_error', () => setConn(false));
@@ -237,6 +307,13 @@ socket.on('connect_error', () => setConn(false));
 socket.on('state', (s) => {
     state = s;
     if (session) applyState();
+});
+
+// Свежая зашифрованная копия комнаты — приходит только банкиру
+socket.on('backup', (blob) => {
+    if (session && session.host && typeof blob === 'string') {
+        store.set('mono_backup', { code: session.code, blob });
+    }
 });
 
 // Банкир закрыл комнату
@@ -277,11 +354,23 @@ $('btn-join').addEventListener('click', () => {
     if (code.length !== 4) return showJoinError('Код — 4 цифры');
     showJoinError('');
     setJoinBusy(true);
-    joinRoom(code, name, null, false);
+    joinRoom(code, name, $('join-pin').value.trim());
+});
+
+// Поле PIN появляется только когда имя уже занято; при смене имени или кода прячем его
+function hidePinRow() {
+    $('join-pin').classList.add('hidden');
+    $('join-pin').value = '';
+}
+$('join-name').addEventListener('input', hidePinRow);
+
+$('join-pin').addEventListener('input', (e) => {
+    e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
 });
 
 $('join-code').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4);
+    hidePinRow();
 });
 
 /* ====================== Применение состояния ====================== */
@@ -938,6 +1027,7 @@ function renderMenu() {
     if (!state) return;
     const me = getMe();
     $('menu-code').textContent = state.code;
+    $('menu-pin').textContent = session && session.pin ? session.pin : '—';
     $('btn-sound').textContent = soundOn ? '🔊 Звук: вкл' : '🔇 Звук: выкл';
     $('bank-tools').classList.toggle('hidden', !(isHost() && mode === 'bank'));
     $('btn-close-room').classList.toggle('hidden', !isHost());
@@ -1023,7 +1113,7 @@ $('btn-close-room').addEventListener('click', async () => {
 $('btn-leave').addEventListener('click', async () => {
     const ok = await confirmDialog(
         'Выйти из комнаты?',
-        'Ваш счёт сохранится. Вернуться можно по коду комнаты и с тем же именем.',
+        'Ваш счёт сохранится. Вернуться можно по коду комнаты, имени и своему PIN (он в меню ⚙️, запомните его).',
         'Выйти',
         true
     );
