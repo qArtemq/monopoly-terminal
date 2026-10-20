@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+    <title>Монополия — терминал</title>
+
+    <!-- PWA / «на экран Домой» -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0b0d10">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Монополия">
+    <link rel="apple-touch-icon" href="app-icon.jpg">
+    <link rel="icon" href="icon.svg" type="image/svg+xml">
+
+    <link rel="stylesheet" href="style.css?v=3">
+</head>
+<body>
+
+    <div id="conn" class="conn">Подключение к серверу…</div>
+    <div id="toasts"></div>
+
+    <!-- ===== Экран входа (помещается на экран без прокрутки) ===== -->
+    <section id="screen-join" class="screen">
+        <div class="join-card">
+            <div class="brand">
+                <span class="logo">🎩</span>
+                <h1>Монополия</h1>
+            </div>
+
+            <label class="field">
+                <span>Ваше имя</span>
+                <input id="join-name" class="input" maxlength="15" autocomplete="off" placeholder="Например, Таня">
+            </label>
+
+            <div class="block">
+                <h2>Новая игра</h2>
+                <div class="row2">
+                    <label class="field">
+                        <span>Стартовые деньги</span>
+                        <input id="create-start" class="input" type="number" inputmode="numeric" value="1500">
+                    </label>
+                    <label class="field">
+                        <span>За круг (Старт)</span>
+                        <input id="create-go" class="input" type="number" inputmode="numeric" value="200">
+                    </label>
+                </div>
+                <button id="btn-create" class="btn primary big">Создать комнату</button>
+            </div>
+
+            <div class="block">
+                <h2>Войти в комнату</h2>
+                <div class="join-row">
+                    <input id="join-code" class="input code" maxlength="4" inputmode="numeric" autocomplete="off" placeholder="Код (4 цифры)">
+                    <button id="btn-join" class="btn big">Войти</button>
+                </div>
+            </div>
+
+            <div id="join-error" class="error"></div>
+        </div>
+    </section>
+
+    <!-- ===== Основной экран ===== -->
+    <section id="screen-app" class="screen hidden">
+        <header class="topbar">
+            <div class="who">
+                <span id="me-dot" class="me-dot"></span>
+                <div class="who-text">
+                    <div id="me-name" class="me-name"></div>
+                    <div id="room-code" class="room-code"></div>
+                </div>
+            </div>
+            <div class="mode-switch" id="mode-switch">
+                <button data-mode="player" class="active">Игрок</button>
+                <button data-mode="bank">Банк</button>
+            </div>
+            <button id="btn-menu" class="icon-btn" aria-label="Меню">⚙️</button>
+        </header>
+
+        <main class="views">
+
+            <!-- Кубики -->
+            <section id="view-dice" class="view active">
+                <div class="dice-zone">
+                    <div class="dice-stage" id="dice-stage">
+                        <div class="dice-wrap"><div class="dice-3d" id="die-1"></div></div>
+                        <div class="dice-wrap"><div class="dice-3d" id="die-2"></div></div>
+                    </div>
+                    <div class="dice-result">
+                        <div class="dice-total-row">
+                            <span id="dice-total" class="dice-total"></span>
+                            <span id="dice-badge" class="dice-badge">ДУБЛЬ!</span>
+                        </div>
+                        <div id="dice-detail" class="dice-detail">Нажмите, чтобы бросить</div>
+                    </div>
+                </div>
+                <div class="recent">
+                    <div class="section-title">Последние броски</div>
+                    <div id="roll-list"></div>
+                </div>
+            </section>
+
+            <!-- Терминал -->
+            <section id="view-pay" class="view">
+                <div class="balance-card">
+                    <div id="balance-label" class="balance-label">Ваш баланс</div>
+                    <div id="balance" class="balance">$0</div>
+                </div>
+
+                <div id="target-title" class="section-title">Кому перевести</div>
+                <div id="targets" class="targets"></div>
+
+                <div class="amount-row">
+                    <div id="amount" class="amount zero">$0</div>
+                    <button id="amount-clear" class="clear-btn" aria-label="Очистить">✕</button>
+                </div>
+                <div id="quick" class="quick"></div>
+
+                <div id="keypad" class="keypad">
+                    <button class="key" data-k="1">1</button>
+                    <button class="key" data-k="2">2</button>
+                    <button class="key" data-k="3">3</button>
+                    <button class="key" data-k="4">4</button>
+                    <button class="key" data-k="5">5</button>
+                    <button class="key" data-k="6">6</button>
+                    <button class="key" data-k="7">7</button>
+                    <button class="key" data-k="8">8</button>
+                    <button class="key" data-k="9">9</button>
+                    <button class="key fn" data-k="000">000</button>
+                    <button class="key" data-k="0">0</button>
+                    <button class="key fn" data-k="bs">⌫</button>
+                </div>
+
+                <div id="actions-player" class="actions">
+                    <button id="btn-pay" class="btn primary big">Перевести</button>
+                </div>
+                <div id="actions-bank" class="actions row2 hidden">
+                    <button id="btn-give" class="btn green big">Выдать</button>
+                    <button id="btn-take" class="btn red big">Забрать</button>
+                </div>
+            </section>
+
+            <!-- Калькулятор -->
+            <section id="view-calc" class="view">
+                <div class="calc-display">
+                    <div id="calc-prev" class="calc-prev"></div>
+                    <div id="calc-expr" class="calc-expr">0</div>
+                    <div id="calc-res" class="calc-res"></div>
+                </div>
+                <div id="calc-keys" class="calc-keys">
+                    <button class="ck fn" data-k="C">C</button>
+                    <button class="ck fn" data-k="BS">⌫</button>
+                    <button class="ck fn" data-k="%">%</button>
+                    <button class="ck op" data-k="/">÷</button>
+                    <button class="ck" data-k="7">7</button>
+                    <button class="ck" data-k="8">8</button>
+                    <button class="ck" data-k="9">9</button>
+                    <button class="ck op" data-k="*">×</button>
+                    <button class="ck" data-k="4">4</button>
+                    <button class="ck" data-k="5">5</button>
+                    <button class="ck" data-k="6">6</button>
+                    <button class="ck op" data-k="-">−</button>
+                    <button class="ck" data-k="1">1</button>
+                    <button class="ck" data-k="2">2</button>
+                    <button class="ck" data-k="3">3</button>
+                    <button class="ck op" data-k="+">+</button>
+                    <button class="ck" data-k="0">0</button>
+                    <button class="ck" data-k="000">000</button>
+                    <button class="ck" data-k=".">,</button>
+                    <button class="ck eq" data-k="=">=</button>
+                </div>
+                <button id="calc-use" class="btn primary big">→ Подставить в терминал</button>
+            </section>
+
+            <!-- История -->
+            <section id="view-log" class="view">
+                <div class="section-title">История операций</div>
+                <div id="log-list"></div>
+            </section>
+        </main>
+
+        <nav class="tabbar">
+            <button class="tab active" data-tab="dice"><span class="ti">🎲</span>Кубики</button>
+            <button class="tab" data-tab="pay"><span class="ti">💸</span>Терминал</button>
+            <button class="tab" data-tab="calc"><span class="ti">🧮</span>Калькулятор</button>
+            <button class="tab" data-tab="log"><span class="ti">📜</span>История</button>
+        </nav>
+    </section>
+
+    <!-- ===== Меню ===== -->
+    <div id="sheet-menu" class="sheet hidden">
+        <div class="sheet-card">
+            <div class="sheet-head">
+                <h2>Меню</h2>
+                <button id="menu-close" class="icon-btn small" aria-label="Закрыть">✕</button>
+            </div>
+
+            <div class="menu-room">
+                <div>
+                    <div class="muted small">Код комнаты</div>
+                    <div id="menu-code" class="menu-code">----</div>
+                </div>
+                <button id="btn-share" class="btn">Поделиться</button>
+            </div>
+
+            <button id="btn-sound" class="menu-item">🔊 Звук: вкл</button>
+
+            <div id="bank-tools" class="hidden">
+                <div class="section-title">Банк: управление игроками</div>
+                <div id="players-manage"></div>
+                <button id="btn-reset" class="menu-item danger">🔄 Начать заново…</button>
+            </div>
+
+            <button id="btn-close-room" class="menu-item danger hidden">🗑 Закрыть комнату для всех…</button>
+
+            <button id="btn-leave" class="menu-item danger">🚪 Выйти из комнаты</button>
+        </div>
+    </div>
+
+    <!-- ===== Подтверждение ===== -->
+    <div id="confirm" class="sheet center-sheet hidden">
+        <div class="sheet-card center">
+            <h2 id="confirm-title"></h2>
+            <p id="confirm-text"></p>
+            <div class="row2">
+                <button id="confirm-no" class="btn big">Отмена</button>
+                <button id="confirm-yes" class="btn primary big">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="app.js?v=4"></script>
+</body>
+</html>
